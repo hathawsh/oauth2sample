@@ -70,14 +70,31 @@ class OAuth2Client(object):
             # CSRF protection
             return HTTPBadRequest(body="Incorrect state value")
 
+        self.prepare_access_token(code)
+
+        userid = self.get_userid()
+        if userid:
+            remember(request, userid)
+
+        location = session.get(self.session_prefix + 'came_from')
+        if not location:
+            location = request.application_url
+        headers = [('Cache-Control', 'no-cache')]
+        return HTTPFound(location=location, headers=headers)
+
+    def prepare_access_token(self, code):
+        """Use an authorization code to get an access token.
+
+        Puts access_token and possibly refresh_at in the session.
+        """
+        request = self.request
         settings = request.registry.settings
+        session = request.session
+
         token_url = settings[self.settings_prefix + 'token_url']
         client_id = settings[self.settings_prefix + 'client_id']
         client_secret = settings[self.settings_prefix + 'client_secret']
-        refresh_interval = int(
-            settings.get(self.settings_prefix + 'refresh_interval', 0))
 
-        # Call the token endpoint to get an access token.
         redirect_uri = urljoin(request.application_url, '@@oauth2callback')
         verify = token_url.startswith('https')
         r = requests.post(token_url, auth=(client_id, client_secret), data={
@@ -98,6 +115,8 @@ class OAuth2Client(object):
         session[self.session_prefix + 'access_token'] = access_token
 
         # Possibly put a refresh_at value in the session.
+        refresh_interval = int(request.registry.settings.get(
+            self.settings_prefix + 'refresh_interval', 0))
         if not refresh_interval:
             expires_in = float(token_response.get('expires_in', 0))
             if not expires_in:
@@ -105,19 +124,13 @@ class OAuth2Client(object):
                 expires_in = float(token_response.get('expires', 0))
             if expires_in:
                 refresh_interval = expires_in / 2
+
+        refresh_at_key = self.session_prefix + 'refresh_at'
         if refresh_interval:
             refresh_at = int(time.time() + refresh_interval)
-            session[self.session_prefix + 'refresh_at'] = refresh_at
-
-        userid = self.get_userid()
-        if userid:
-            remember(request, userid)
-
-        location = session.get(self.session_prefix + 'came_from')
-        if not location:
-            location = request.application_url
-        headers = [('Cache-Control', 'no-cache')]
-        return HTTPFound(location=location, headers=headers)
+            session[refresh_at_key] = refresh_at
+        elif refresh_at_key in session:
+            del session[refresh_at_key]
 
     def refresh(self):
         """If it is time to do so, refresh the access token."""
