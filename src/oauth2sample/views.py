@@ -1,11 +1,11 @@
 
 from oauth2sample.models import SampleSite
-from oauth2sample.oauth2client import FacebookClient
-from oauth2sample.oauth2client import YassoClient
 from pyramid.httpexceptions import HTTPForbidden
 from pyramid.security import authenticated_userid
 from pyramid.view import forbidden_view_config
 from pyramid.view import view_config
+from pyramid_oauth2_client.facebook import FacebookClient
+from pyramid_oauth2_client.yasso import YassoClient
 
 
 def get_oauth2_client(request):
@@ -28,7 +28,7 @@ def home(request):
     return {'userid': authenticated_userid(request)}
 
 
-@forbidden_view_config(renderer='string')
+@forbidden_view_config()
 def forbidden(request):
     if authenticated_userid(request) is not None:
         return HTTPForbidden()

@@ -5,6 +5,7 @@ import sys
 
 requires = [
     'pyramid',
+    'pyramid_oauth2_client',
     'requests',
     'setuptools',
 ]
